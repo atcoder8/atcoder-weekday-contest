@@ -1,48 +1,59 @@
-use itertools::enumerate;
+use std::cmp::Reverse;
+
 use proconio::input;
 
 fn main() {
     input! {
         (n, m): (usize, usize),
         ww: [u64; n],
-        cc: [u64; m],
+        mut cc: [u64; m],
     }
 
-    let mut cost_by_comb = vec![0; 1 << n];
-    for (i, &w) in enumerate(&ww) {
-        cost_by_comb[1 << i] = w;
-    }
-    for axis in 0..n {
-        for bit in 0..1 << n {
-            if bit >> axis & 1 == 1 {
-                cost_by_comb[bit] += cost_by_comb[bit ^ (1 << axis)];
-            }
-        }
-    }
+    // トラックを積載重量の上限に関して降順にソート
+    cc.sort_unstable_by_key(|&c| Reverse(c));
 
-    let mut dp = vec![false; 1 << n];
-    dp[0] = true;
-    let mut next_dp = vec![false; 1 << n];
-    for &c in &cc {
-        next_dp.copy_from_slice(&dp);
+    // 既に積み込まれた荷物の集合に対する(現在のトラックの番号, 現在のトラックの荷重)の最小値
+    // 積み込み方法が見つかっていない場合は`None`
+    let mut dp: Vec<Option<(usize, u64)>> = vec![None; 1 << n];
+    dp[0] = Some((0, 0));
+    for from in 0..1 << n {
+        let Some((curr_track, curr_load)) = dp[from] else {
+            continue;
+        };
 
-        for from in 0..1 << n {
-            if !dp[from] {
+        for add_bit in 0..n {
+            if from >> add_bit & 1 == 1 {
                 continue;
             }
 
-            let rem_bits = !from & ((1 << n) - 1);
-            let mut add_bits = rem_bits;
-            while add_bits != 0 {
-                if cost_by_comb[add_bits] <= c {
-                    next_dp[from | add_bits] = true;
-                }
-                add_bits = (add_bits - 1) & rem_bits;
+            // 現在のトラック、または次のトラックに積み込む
+            // トラックを積載重量の上限に関して降順にソートしているためその次のトラックを参照する必要はない
+            let to = from | (1 << add_bit);
+            let weight = ww[add_bit];
+            if curr_load + weight <= cc[curr_track] {
+                chmin_for_option(&mut dp[to], (curr_track, curr_load + weight));
+            } else if curr_track + 1 < m && weight <= cc[curr_track + 1] {
+                chmin_for_option(&mut dp[to], (curr_track + 1, weight));
             }
         }
-
-        std::mem::swap(&mut dp, &mut next_dp);
     }
 
-    println!("{}", if dp[(1 << n) - 1] { "Yes" } else { "No" });
+    // 全ての荷物を積み込む方法が見つかったかどうかを判定
+    let loadable = dp[(1 << n) - 1].is_some();
+    println!("{}", if loadable { "Yes" } else { "No" });
+}
+
+/// `value`の値よりも`cand_value`が小さい場合は値の更新を行います。
+/// ただし、`value`が`None`である場合は常に更新します。
+pub fn chmin_for_option<T>(value: &mut Option<T>, cand_value: T) -> bool
+where
+    T: PartialOrd,
+{
+    if value.as_ref().is_some_and(|cost| cost <= &cand_value) {
+        return false;
+    }
+
+    *value = Some(cand_value);
+
+    true
 }
