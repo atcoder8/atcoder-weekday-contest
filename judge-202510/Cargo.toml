@@ -5,4 +5,5 @@ resolver = "2"
 members = [
   "awc0003",
   "awc0040",
+  "awc0053",
 ]
